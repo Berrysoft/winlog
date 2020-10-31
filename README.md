@@ -44,11 +44,13 @@ The five Rust log levels are mapped to Windows [event types](https://docs.micros
 Plain winlog:
 ```
 [dependencies]
+log = "*"
 winlog = "*"
 ```
 Or to enable env_logger filtering support:
 ```
 [dependencies]
+log = "*"
 winlog = { version = "0.2.5", features = ["env_logger"] }
 ```
 
@@ -70,6 +72,8 @@ If your MSI installer (or similar) registers your event sources you should not c
 
 Without env_logger filtering:
 ```
+use log::{info, trace};
+
 winlog::init("Example Log").unwrap();
 
 info!("Hello, Event Log");
@@ -78,6 +82,8 @@ trace!("This will be logged too");
 
 Use the winlog backend with env_logger filter enabled:
 ```
+use log::{info, trace};
+
 // # export RUST_LOG="info"
 winlog::init("Example Log").unwrap();
 info!("Hello, Event Log");
