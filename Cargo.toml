@@ -1,5 +1,5 @@
 [package]
-name = "winlog-lite"
+name = "winlog2"
 version = "0.2.7"
 edition = "2021"
 authors = [

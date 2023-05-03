@@ -1,9 +1,6 @@
-# winlog
+# winlog2
 
-[![Build status](https://img.shields.io/gitlab/pipeline/arbitrix/winlog.svg)](https://gitlab.com/arbitrix/winlog/pipelines)
-[![Latest version](https://img.shields.io/crates/v/winlog.svg)](https://crates.io/crates/winlog)
-[![Documentation](https://docs.rs/winlog/badge.svg)](https://docs.rs/winlog)
-[![License](https://img.shields.io/crates/l/winlog.svg)](https://gitlab.com/arbitrix/winlog/blob/master/LICENSE)
+This is a fork of `winlog`.
 
 A simple [Rust log](https://docs.rs/log/latest/log/) backend to send messages to the [Windows event log](https://docs.microsoft.com/en-us/windows/desktop/eventlog/event-logging).
 
@@ -32,9 +29,7 @@ The five Rust log levels are mapped to Windows [event types](https://docs.micros
 
 ## Requirements
 
-* Rust 1.29+
 * Windows or MinGW
-* [Windows, optional] [mc.exe](https://docs.microsoft.com/en-us/windows/desktop/wes/message-compiler--mc-exe-) and [rc.exe](https://docs.microsoft.com/en-us/windows/desktop/menurc/resource-compiler) (only required when `eventmsgs.mc` is changed)
 * [Windows, optional] PowerShell (used for the end-to-end test)
 
 ## Usage
@@ -103,6 +98,13 @@ installer (or similar) deregisters your event sources you should not call this.
 
 ## What's New
 
+### 0.2.7
+* Fork from original repo.
+* Use `windows-sys` instead of `winapi`.
+* Update other dependencies.
+* Generate `eventmsgs.rc` and compile it with `winres`.
+* Fix `end-to-end` test to deregister correctly even if it fails.
+
 ### 0.2.6
 
 * Disable unneeded regex features to speed up the build.
@@ -149,16 +151,8 @@ cargo build --release
 
 ### Internals
 
-Artifacts `eventmsgs.lib` and `eventmsgs.rs` are under source control so users 
-don't need to have `mc.exe` and `rc.exe` installed for a standard build.
-
-1. If `build.rs` determines that `eventmsgs.mc` was changed then `build.rs`:
-   * invokes `mc.exe` (which creates `eventmsgs.h`)
-   * invokes `rc.exe` (which creates `eventmsgs.lib`)
-   * creates `eventmsgs.rs` from `eventmsgs.h`.
-2. `build.rs` emits linker flags so `eventmsgs.lib` can found.
-3. Standard `cargo build` follows.
-
+Artifacts `eventmsgs.rc` and `MSG00409.bin` are under source control so users 
+don't need to have `mc.exe` installed for a standard build.
 
 ## Testing
 
@@ -175,9 +169,9 @@ Process:
    `HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\winlog-test-###########`.
 2. Write some log messages to the event source.
 3. Use PowerShell to retrieve the logged messages.
-4. Deregister our event source. This removes the `winlog-test-###########` 
+4. Assert that the retrieved log messages are correct. 
+5. Deregister our event source. This removes the `winlog-test-###########` 
    registry key.
-5. Assert that the retrieved log messages are correct. 
 
 
 ## License

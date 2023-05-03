@@ -2,7 +2,7 @@ use log::{log, Level};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use scopeguard::defer;
 use std::{process::Command, str};
-use winlog_lite::{init, try_deregister, try_register};
+use winlog2::{init, try_deregister, try_register};
 
 #[test]
 fn end_to_end() {
