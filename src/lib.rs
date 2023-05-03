@@ -1,3 +1,8 @@
+//! A simple [Rust log](https://docs.rs/log/latest/log/) backend
+//! to send messages to [Windows event log](https://docs.microsoft.com/en-us/windows/desktop/eventlog/event-logging).
+
+#![warn(missing_docs)]
+
 use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 use widestring::U16CString;
 use windows_sys::Win32::{
@@ -18,12 +23,18 @@ const MSG_TRACE: u32 = 0x40000005;
 
 const REG_BASEKEY: &str = "SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application";
 
+/// Error type of methods in this crate.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// System error.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("String convention failed")]
-    StringConventionFailed,
+    /// String convertion error.
+    #[error("String convertion failed")]
+    StringConvertionFailed,
+    /// Calling [`log::set_boxed_logger`] failed.
+    #[error("Set logger failed: {0}")]
+    SetLoggerFailed(#[from] SetLoggerError),
 }
 
 #[cfg(not(feature = "env_logger"))]
@@ -51,38 +62,35 @@ fn make_filter() -> Filter {
     builder.build()
 }
 
-pub struct WinLogger {
+struct WinLogger {
     handle: HANDLE,
     filter: Filter,
 }
 
-unsafe impl Send for WinLogger {}
-unsafe impl Sync for WinLogger {}
-
-fn discard_result<R, E>(_result: &Result<R, E>) {}
-
-pub fn deregister(name: &str) {
-    discard_result(&try_deregister(name))
+/// Initialize the global logger as the windows event logger.
+/// See document of [`register`].
+pub fn init(name: &str) -> Result<(), Error> {
+    log::set_boxed_logger(Box::new(WinLogger::new(name)?))?;
+    log::set_max_level(LevelFilter::Trace);
+    Ok(())
 }
 
-pub fn init(name: &str) -> Result<(), SetLoggerError> {
-    log::set_boxed_logger(Box::new(WinLogger::new(name)))
-        .map(|()| log::set_max_level(LevelFilter::Trace))
-}
-
-pub fn register(name: &str) {
-    discard_result(&try_register(name))
-}
-
-pub fn try_deregister(name: &str) -> Result<(), Error> {
+/// Attempt to remove the event source registry.
+/// See document of [`register`].
+pub fn deregister(name: &str) -> Result<(), Error> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let cur_ver = hklm.open_subkey(REG_BASEKEY)?;
     cur_ver.delete_subkey(name).map_err(From::from)
 }
 
-pub fn try_register(name: &str) -> Result<(), Error> {
+/// Attempt to add the event source registry.
+///
+/// Any event source sould be registried first.
+/// You need to call [`register`] when installing the program,
+/// and call [`deregister`] when uninstalling the program.
+pub fn register(name: &str) -> Result<(), Error> {
     let current_exe = ::std::env::current_exe()?;
-    let exe_path = current_exe.to_str().ok_or(Error::StringConventionFailed)?;
+    let exe_path = current_exe.to_str().ok_or(Error::StringConvertionFailed)?;
 
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let cur_ver = hklm.open_subkey(REG_BASEKEY)?;
@@ -93,15 +101,8 @@ pub fn try_register(name: &str) -> Result<(), Error> {
 }
 
 impl WinLogger {
-    pub fn new(name: &str) -> WinLogger {
-        Self::try_new(name).unwrap_or(WinLogger {
-            handle: 0,
-            filter: make_filter(),
-        })
-    }
-
-    pub fn try_new(name: &str) -> Result<WinLogger, Error> {
-        let name = U16CString::from_str(name).map_err(|_| Error::StringConventionFailed)?;
+    pub fn new(name: &str) -> Result<WinLogger, Error> {
+        let name = U16CString::from_str(name).map_err(|_| Error::StringConvertionFailed)?;
         let handle = unsafe { RegisterEventSourceW(std::ptr::null_mut(), name.as_ptr()) };
 
         if handle == 0 {

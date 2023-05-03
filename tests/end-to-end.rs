@@ -2,7 +2,7 @@ use log::{log, Level};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use scopeguard::defer;
 use std::{process::Command, str};
-use winlog2::{init, try_deregister, try_register};
+use winlog2::{deregister, init, register};
 
 #[test]
 fn end_to_end() {
@@ -15,9 +15,9 @@ fn end_to_end() {
     let log_source = format!("winlog-test-{}", rand_string);
 
     // Add log source to Windows registry
-    try_register(&log_source).unwrap();
+    register(&log_source).unwrap();
     // Remove log source from Windows registry
-    defer!(try_deregister(&log_source).unwrap());
+    defer!(deregister(&log_source).unwrap());
 
     // Do some logging and verification
     init(&log_source).unwrap();
