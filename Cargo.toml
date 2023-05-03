@@ -1,14 +1,17 @@
 [package]
-name = "winlog"
-version = "0.2.6"
-authors = ["Jeroen C. van Gelderen <jeroen@vangelderen.org>"]
-build = "build.rs"
-categories = [ "development-tools::debugging", "os::windows-apis" ]
+name = "winlog-lite"
+version = "0.2.7"
+edition = "2021"
+authors = [
+    "Jeroen C. van Gelderen <jeroen@vangelderen.org>",
+    "Berrysoft <Strawberry_Str@hotmail.com>",
+]
+categories = ["development-tools::debugging", "os::windows-apis"]
 description = "A simple Rust log backend to send messages to the Windows event log."
-documentation = "https://gitlab.com/arbitrix/winlog"
-homepage = "https://gitlab.com/arbitrix/winlog"
-repository = "https://gitlab.com/arbitrix/winlog"
-keywords = [ "eventlog", "logging", "windows" ]
+documentation = "https://github.com/Berrysoft/winlog"
+homepage = "https://github.com/Berrysoft/winlog"
+repository = "https://github.com/Berrysoft/winlog"
+keywords = ["eventlog", "logging", "windows"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 
@@ -16,17 +19,16 @@ readme = "README.md"
 default-target = "x86_64-pc-windows-msvc"
 
 [build-dependencies]
-regex = { version = "1.0", features = ["std", "unicode-perl"], default-features = false }
-sha2 = "0.8.0"
+winres = "0.1"
 
 [dev-dependencies]
-rand = "0.5"
+rand = "0.8"
+scopeguard = "1"
 
 [dependencies]
-env_logger = { version = "0.6", features = [], default-features = false, optional = true }
-log = { version = "0.4", features = [ "std" ] }
-winapi = { version = "0.3", features = [ "winbase" ] }
-winreg = "0.5"
-
-[features]
-default = []
+env_logger = { version = "0.10", default-features = false, optional = true }
+log = { version = "0.4", features = ["std"] }
+windows-sys = { version = "0.48", features = ["Win32_System_EventLog"] }
+widestring = "1"
+winreg = "0.50"
+thiserror = "1"

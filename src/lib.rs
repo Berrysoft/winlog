@@ -1,57 +1,32 @@
-extern crate log;
-extern crate winapi;
-extern crate winreg;
-
-#[cfg(feature = "env_logger")]
-extern crate env_logger;
-
 use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
-use std::{error, ffi::OsStr, fmt, io, iter::once, os::windows::ffi::OsStrExt};
-use winapi::{
-    shared::ntdef::{HANDLE, NULL},
-    um::{
-        winbase::{DeregisterEventSource, RegisterEventSourceW, ReportEventW},
-        winnt::{EVENTLOG_ERROR_TYPE, EVENTLOG_INFORMATION_TYPE, EVENTLOG_WARNING_TYPE},
+use widestring::U16CString;
+use windows_sys::Win32::{
+    Foundation::HANDLE,
+    System::EventLog::{
+        DeregisterEventSource, RegisterEventSourceW, ReportEventW, EVENTLOG_ERROR_TYPE,
+        EVENTLOG_INFORMATION_TYPE, EVENTLOG_WARNING_TYPE,
     },
 };
 use winreg::{enums::*, RegKey};
 
-mod eventmsgs;
-use eventmsgs::{MSG_DEBUG, MSG_ERROR, MSG_INFO, MSG_TRACE, MSG_WARNING};
+pub const MSG_ERROR: u32 = 0xC0000001;
+pub const MSG_WARNING: u32 = 0x80000002;
+pub const MSG_INFO: u32 = 0x40000003;
+pub const MSG_DEBUG: u32 = 0x40000004;
+pub const MSG_TRACE: u32 = 0x40000005;
 
 const REG_BASEKEY: &str = "SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application";
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    Io(io::Error),
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Could not determine executable path")]
     ExePathNotFound,
+    #[error("Call to RegisterEventSource failed")]
     RegisterSourceFailed,
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error {
-        Error::Io(err)
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Error::Io(ref err) => write!(f, "IO error: {}", err),
-            Error::ExePathNotFound => write!(f, "Could not determine executable path"),
-            Error::RegisterSourceFailed => write!(f, "Call to RegisterEventSource failed"),
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
-            Error::Io(ref err) => Some(err),
-            Error::ExePathNotFound => None,
-            Error::RegisterSourceFailed => None,
-        }
-    }
+    #[error("String convention failed")]
+    StringConventionFailed,
 }
 
 #[cfg(not(feature = "env_logger"))]
@@ -87,13 +62,7 @@ pub struct WinLogger {
 unsafe impl Send for WinLogger {}
 unsafe impl Sync for WinLogger {}
 
-fn discard_result<R, E>(_result: &Result<R, E>) {
-    ()
-}
-
-fn win_string(s: &str) -> Vec<u16> {
-    OsStr::new(s).encode_wide().chain(once(0)).collect()
-}
+fn discard_result<R, E>(_result: &Result<R, E>) {}
 
 pub fn deregister(name: &str) {
     discard_result(&try_deregister(name))
@@ -120,25 +89,25 @@ pub fn try_register(name: &str) -> Result<(), Error> {
 
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let cur_ver = hklm.open_subkey(REG_BASEKEY)?;
-    let app_key = cur_ver.create_subkey(name)?;
-    app_key
-        .set_value("EventMessageFile", &exe_path)
-        .map_err(From::from)
+    let (app_key, _) = cur_ver.create_subkey(name)?;
+    app_key.set_value("EventMessageFile", &exe_path)?;
+    app_key.set_value("TypesSupported", &7u32)?;
+    Ok(())
 }
 
 impl WinLogger {
     pub fn new(name: &str) -> WinLogger {
         Self::try_new(name).unwrap_or(WinLogger {
-            handle: NULL,
+            handle: 0,
             filter: make_filter(),
         })
     }
 
     pub fn try_new(name: &str) -> Result<WinLogger, Error> {
-        let wide_name = win_string(name);
-        let handle = unsafe { RegisterEventSourceW(std::ptr::null_mut(), wide_name.as_ptr()) };
+        let name = U16CString::from_str(name).map_err(|_| Error::StringConventionFailed)?;
+        let handle = unsafe { RegisterEventSourceW(std::ptr::null_mut(), name.as_ptr()) };
 
-        if handle == NULL {
+        if handle == 0 {
             Err(Error::RegisterSourceFailed)
         } else {
             Ok(WinLogger {
@@ -150,7 +119,7 @@ impl WinLogger {
 }
 
 impl Drop for WinLogger {
-    fn drop(&mut self) -> () {
+    fn drop(&mut self) {
         unsafe { DeregisterEventSource(self.handle) };
     }
 }
@@ -162,7 +131,8 @@ impl log::Log for WinLogger {
 
     fn log(&self, record: &Record) {
         if self.filter.matches(record) {
-            let type_and_msg = match record.level() {
+            let level = record.level();
+            let (wtype, dweventid) = match level {
                 Level::Error => (EVENTLOG_ERROR_TYPE, MSG_ERROR),
                 Level::Warn => (EVENTLOG_WARNING_TYPE, MSG_WARNING),
                 Level::Info => (EVENTLOG_INFORMATION_TYPE, MSG_INFO),
@@ -170,19 +140,19 @@ impl log::Log for WinLogger {
                 Level::Trace => (EVENTLOG_INFORMATION_TYPE, MSG_TRACE),
             };
 
-            let msg = win_string(&format!("{:?}", record.args()));
-            let mut vec = vec![msg.as_ptr()];
+            let msg = U16CString::from_str_truncate(format!("{}", record.args()));
+            let msg_ptr = msg.as_ptr();
 
             unsafe {
                 ReportEventW(
                     self.handle,
-                    type_and_msg.0, // type
-                    0,              // category
-                    type_and_msg.1, // event id == resource msg id
+                    wtype,     // type
+                    0,         // category
+                    dweventid, // event id == resource msg id
                     std::ptr::null_mut(),
-                    vec.len() as u16,
+                    1,
                     0,
-                    vec.as_mut_ptr(),
+                    &msg_ptr,
                     std::ptr::null_mut(),
                 )
             };
