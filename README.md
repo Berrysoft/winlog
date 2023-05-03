@@ -93,12 +93,13 @@ installer (or similar) deregisters your event sources you should not call this.
 
 ## What's New
 
-### 0.2.7
+### 0.3.0
 * Fork from original repo.
 * Use `windows-sys` instead of `winapi`.
 * Update other dependencies.
 * Generate `eventmsgs.rc` and compile it with `winres`.
 * Fix `end-to-end` test to deregister correctly even if it fails.
+* Remove APIs that silently fails.
 
 ### 0.2.6
 
