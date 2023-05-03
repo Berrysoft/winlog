@@ -9,11 +9,12 @@ use windows_sys::Win32::{
 };
 use winreg::{enums::*, RegKey};
 
-pub const MSG_ERROR: u32 = 0xC0000001;
-pub const MSG_WARNING: u32 = 0x80000002;
-pub const MSG_INFO: u32 = 0x40000003;
-pub const MSG_DEBUG: u32 = 0x40000004;
-pub const MSG_TRACE: u32 = 0x40000005;
+// Generated from MC.
+const MSG_ERROR: u32 = 0xC0000001;
+const MSG_WARNING: u32 = 0x80000002;
+const MSG_INFO: u32 = 0x40000003;
+const MSG_DEBUG: u32 = 0x40000004;
+const MSG_TRACE: u32 = 0x40000005;
 
 const REG_BASEKEY: &str = "SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application";
 
@@ -21,16 +22,12 @@ const REG_BASEKEY: &str = "SYSTEM\\CurrentControlSet\\Services\\EventLog\\Applic
 pub enum Error {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("Could not determine executable path")]
-    ExePathNotFound,
-    #[error("Call to RegisterEventSource failed")]
-    RegisterSourceFailed,
     #[error("String convention failed")]
     StringConventionFailed,
 }
 
 #[cfg(not(feature = "env_logger"))]
-pub struct Filter {}
+struct Filter {}
 #[cfg(not(feature = "env_logger"))]
 impl Filter {
     fn enabled(&self, _metadata: &Metadata) -> bool {
@@ -85,7 +82,7 @@ pub fn try_deregister(name: &str) -> Result<(), Error> {
 
 pub fn try_register(name: &str) -> Result<(), Error> {
     let current_exe = ::std::env::current_exe()?;
-    let exe_path = current_exe.to_str().ok_or(Error::ExePathNotFound)?;
+    let exe_path = current_exe.to_str().ok_or(Error::StringConventionFailed)?;
 
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let cur_ver = hklm.open_subkey(REG_BASEKEY)?;
@@ -108,7 +105,7 @@ impl WinLogger {
         let handle = unsafe { RegisterEventSourceW(std::ptr::null_mut(), name.as_ptr()) };
 
         if handle == 0 {
-            Err(Error::RegisterSourceFailed)
+            Err(Error::Io(std::io::Error::last_os_error()))
         } else {
             Ok(WinLogger {
                 handle,
