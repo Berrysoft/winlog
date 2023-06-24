@@ -1,4 +1,4 @@
-use winres::WindowsResource;
+use winresource::WindowsResource;
 
 fn main() {
     WindowsResource::new()
