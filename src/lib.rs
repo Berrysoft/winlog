@@ -54,10 +54,10 @@ fn make_filter() -> Filter {
 }
 
 #[cfg(feature = "env_logger")]
-use env_logger::filter::Filter;
+use env_logger::Logger as Filter;
 #[cfg(feature = "env_logger")]
 fn make_filter() -> Filter {
-    use env_logger::filter::Builder;
+    use env_logger::Builder;
     let mut builder = Builder::from_env("RUST_LOG");
     builder.build()
 }
@@ -105,7 +105,7 @@ impl WinLogger {
         let name = U16CString::from_str(name).map_err(|_| Error::StringConvertionFailed)?;
         let handle = unsafe { RegisterEventSourceW(std::ptr::null_mut(), name.as_ptr()) };
 
-        if handle == 0 {
+        if handle.is_null() {
             Err(Error::Io(std::io::Error::last_os_error()))
         } else {
             Ok(WinLogger {
@@ -121,6 +121,10 @@ impl Drop for WinLogger {
         unsafe { DeregisterEventSource(self.handle) };
     }
 }
+
+// SAFETY: event source should be thread safe
+unsafe impl Send for WinLogger {}
+unsafe impl Sync for WinLogger {}
 
 impl log::Log for WinLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
